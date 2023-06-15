@@ -9,12 +9,11 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <netdb.h>
 #include <dirent.h>
 #include <pwd.h>
 #include <grp.h>
 
-#define BUFFER_SIZE 1500
+#define BUFFER_SIZE 1024
 #define MAX_CLIENTS 3
 
 /**
@@ -38,26 +37,67 @@ void recv_file(int sockfd, char *buffer, const char *filename)
     memset(buffer, 0, BUFFER_SIZE);
 
     // 创建本地文件
-    std::ofstream outfile(filename, std::ios::out | std::ios::binary);
-    if (!outfile)
+    FILE *outfile = fopen(filename, "wb");
+    if (outfile == NULL)
     {
         memset(buffer, 0, BUFFER_SIZE);
         sprintf(buffer, "Failed to create file.\r\n");
-        send(sockfd, buffer, strlen(buffer), 0);
+        send(sockfd, buffer, strlen(buffer), MSG_NOSIGNAL);
         return;
     }
 
+    // // 接收文件数据
+    // int n;
+    // while ((n = recv(sockfd, buffer, BUFFER_SIZE, 0)) > 0)
+    //     fwrite(buffer, sizeof(char), n, outfile);
+
     // 接收文件数据
     int n;
-    while ((n = recv(sockfd, buffer, BUFFER_SIZE, 0)) > 0)
-        outfile.write(buffer, n);
+    while (true)
+    {
+        // 使用select函数等待socket变为可读
+        fd_set read_fds;
+        FD_ZERO(&read_fds);
+        FD_SET(sockfd, &read_fds);
 
-    outfile.close();
+        // 设置超时时间为1秒
+        struct timeval timeout = {1, 0};
+        int ret = select(sockfd + 1, &read_fds, NULL, NULL, &timeout);
+        if (ret == -1)
+        {
+            // 出现错误
+            break;
+        }
+        else if (ret == 0)
+        {
+            // 超时
+            break;
+        }
+        else
+        {
+            // socket变为可读，使用recv函数接收数据
+            n = recv(sockfd, buffer, BUFFER_SIZE, 0);
+            if (n == -1)
+            {
+                // 出现错误
+                break;
+            }
+            else if (n == 0)
+            {
+                // 对端已经关闭连接
+                break;
+            }
+            else
+            {
+                // 接收到了数据
+                fwrite(buffer, sizeof(char), n, outfile);
+            }
+        }
+    }
 
-    // 发送文件传输完成信息
-    memset(buffer, 0, BUFFER_SIZE);
-    sprintf(buffer, "File transfer complete.\r\n");
-    send(sockfd, buffer, strlen(buffer), MSG_NOSIGNAL);
+    fclose(outfile);
+
+    printf("File transfer complete.\r\n");
 }
 
 /**
@@ -71,8 +111,8 @@ void send_file(int sockfd, char *buffer, const char *filename)
     memset(buffer, 0, BUFFER_SIZE);
 
     // 打开本地文件
-    std::ifstream infile(filename, std::ios::in | std::ios::binary);
-    if (!infile)
+    FILE *infile = fopen(filename, "rb");
+    if (infile == NULL)
     {
         memset(buffer, 0, BUFFER_SIZE);
         sprintf(buffer, "Failed to open file.\r\n");
@@ -81,15 +121,11 @@ void send_file(int sockfd, char *buffer, const char *filename)
     }
 
     // 发送文件数据
-    while (!infile.eof())
-    {
-        infile.read(buffer, BUFFER_SIZE);
-        int n = infile.gcount();
-        if (n > 0)
-            send(sockfd, buffer, n, 0);
-    }
+    int n;
+    while ((n = fread(buffer, sizeof(char), BUFFER_SIZE, infile)) > 0)
+        send(sockfd, buffer, n, 0);
 
-    infile.close();
+    fclose(infile);
 
     // 输出文件传输完成信息
     printf("File transfer complete.\r\n");
@@ -201,7 +237,7 @@ void send_directory_list(int sockfd, char *buffer)
 }
 
 /**
- * 更改当前工作目录
+ * @brief 更改当前工作目录
  * @param sockfd 套接字描述符
  * @param buffer 缓冲区指针
  * @param path 目录路径
@@ -223,7 +259,7 @@ void change_directory(int sockfd, char *buffer, const char *path)
 }
 
 /**
- * 向客户端发送当前工作目录的路径
+ * @brief 向客户端发送当前工作目录的路径
  * @param sockfd 套接字描述符
  * @param buffer 缓冲区指针
  */
@@ -269,7 +305,7 @@ void send_system_info(int sockfd, char *buffer)
 }
 
 /**
- * 向客户端发送“Goodbye.”的消息
+ * @brief 向客户端发送“Goodbye.”的消息
  * @param sockfd 套接字描述符
  * @param buffer 缓冲区指针
  */
@@ -280,16 +316,94 @@ void send_goodbye_message(int sockfd, char *buffer)
     send(sockfd, buffer, strlen(buffer), 0);
 }
 
-int main(int argc, char *argv[])
+/**
+ * @brief 处理与客户端的通信
+ * @param sockfd 套接字描述符
+ * @param client_addr 客户端地址
+*/
+void handle_client(int new_sockfd, struct sockaddr_in client_addr)
 {
-    if (argc != 2)
+    // 处理与客户端的通信
+    char buffer[BUFFER_SIZE];
+    memset(buffer, 0, BUFFER_SIZE);
+    sprintf(buffer, "Welcome to ftp server!\r\n");
+    send(new_sockfd, buffer, strlen(buffer), 0);
+
+    while (true)
     {
-        fprintf(stderr, "Usage: %s <port>\n", argv[0]);
-        exit(1);
+        memset(buffer, 0, BUFFER_SIZE);
+        int n = recv(new_sockfd, buffer, BUFFER_SIZE - 1, 0);
+        if (n < 0)
+            error("Error: cannot receive data from client.");
+        else if (n == 0)
+        {
+            printf("Client disconnected. IP address: %s, port: %d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+            break;
+        }
+
+        printf("Received data from client: %s", buffer);
+
+        // 解析命令和参数
+        char cmd[5];
+        char arg[BUFFER_SIZE];
+        memset(cmd, 0, 5);
+        memset(arg, 0, BUFFER_SIZE);
+        sscanf(buffer, "%4s %[^\r\n]", cmd, arg);
+
+        // 处理命令
+        if (strcmp(cmd, "QUIT") == 0)
+        {
+            send_goodbye_message(new_sockfd, buffer);
+            break;
+        }
+        else if (strcmp(cmd, "SYST") == 0)
+        {
+            send_system_info(new_sockfd, buffer);
+        }
+        else if (strcmp(cmd, "PWD") == 0)
+        {
+            send_current_directory_path(new_sockfd, buffer);
+        }
+        else if (strcmp(cmd, "CD") == 0)
+        {
+            change_directory(new_sockfd, buffer, arg);
+        }
+        else if (strcmp(cmd, "DIR") == 0)
+        {
+            send_directory_list(new_sockfd, buffer);
+        }
+        else if (strcmp(cmd, "SIZE") == 0)
+        {
+            send_file_size(new_sockfd, buffer, arg);
+        }
+        else if (strcmp(cmd, "GET") == 0)
+        {
+            send_file(new_sockfd, buffer, arg);
+        }
+        else if (strcmp(cmd, "PUT") == 0)
+        {
+            recv_file(new_sockfd, buffer, arg);
+        }
+        else
+        {
+            // 发送无效命令信息
+            memset(buffer, 0, BUFFER_SIZE);
+            sprintf(buffer, "Invalid command.\r\n");
+            send(new_sockfd, buffer, strlen(buffer), MSG_NOSIGNAL);
+        }
     }
 
-    int port = atoi(argv[1]);
+    // 关闭socket
+    close(new_sockfd);
+}
 
+/**
+ * @brief 启动FTP服务器，监听指定端口号，并处理客户端连接请求
+ * @param port 服务器要监听的端口号
+ * @return 返回创建的套接字文件描述符
+ */
+int start_server(int port)
+{
     // 创建套接字
     int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sockfd < 0)
@@ -312,6 +426,21 @@ int main(int argc, char *argv[])
 
     printf("Server started. Listening on port %d...\n", port);
 
+    return sockfd;
+}
+
+int main(int argc, char *argv[])
+{
+    if (argc != 2)
+    {
+        fprintf(stderr, "Usage: %s <port>\n", argv[0]);
+        exit(1);
+    }
+
+    int port = atoi(argv[1]);
+
+    int sockfd = start_server(port);
+
     while (true)
     {
         // 接受客户端的连接请求
@@ -324,84 +453,7 @@ int main(int argc, char *argv[])
         printf("Client connected. IP address: %s, port: %d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
         // 处理与客户端的通信
-        char buffer[BUFFER_SIZE];
-        memset(buffer, 0, BUFFER_SIZE);
-        sprintf(buffer, "Welcome to ftp server!\r\n");
-        send(new_sockfd, buffer, strlen(buffer), 0);
-
-        while (true)
-        {
-            memset(buffer, 0, BUFFER_SIZE);
-            int n = recv(new_sockfd, buffer, BUFFER_SIZE - 1, 0);
-            if (n < 0)
-                error("Error: cannot receive data from client.");
-            else if (n == 0)
-            {
-                printf("Client disconnected. IP address: %s, port: %d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-                break;
-            }
-
-            printf("Received data from client: %s", buffer);
-
-            // 解析命令和参数
-            char cmd[5];
-            char arg[BUFFER_SIZE];
-            memset(cmd, 0, 5);
-            memset(arg, 0, BUFFER_SIZE);
-            sscanf(buffer, "%4s %[^\r\n]", cmd, arg);
-
-            // 处理命令
-            if (strcmp(cmd, "QUIT") == 0)
-            {
-                // 断开连接
-                send_goodbye_message(new_sockfd, buffer);
-                break;
-            }
-            else if (strcmp(cmd, "SYST") == 0)
-            {
-                // 发送系统信息
-                send_system_info(new_sockfd, buffer);
-            }
-            else if (strcmp(cmd, "PWD") == 0)
-            {
-                // 发送当前工作目录的路径
-                send_current_directory_path(new_sockfd, buffer);
-            }
-            else if (strcmp(cmd, "CD") == 0)
-            {
-                // 改变当前工作目录
-                change_directory(new_sockfd, buffer, arg);
-            }
-            else if (strcmp(cmd, "DIR") == 0)
-            {
-                send_directory_list(new_sockfd, buffer);
-            }
-            else if (strcmp(cmd, "SIZE") == 0)
-            {
-                // 发送文件大小信息
-                send_file_size(new_sockfd, buffer, arg);
-            }
-            else if (strcmp(cmd, "GET") == 0)
-            {
-                // 发送文件
-                send_file(new_sockfd, buffer, arg);
-            }
-            else if (strcmp(cmd, "PUT") == 0)
-            {
-                // 接收文件
-                recv_file(new_sockfd, buffer, arg);
-            }
-            else
-            {
-                // 发送无效命令信息
-                memset(buffer, 0, BUFFER_SIZE);
-                sprintf(buffer, "Invalid command.\r\n");
-                send(new_sockfd, buffer, strlen(buffer), MSG_NOSIGNAL);
-            }
-        }
-
-        // 关闭socket
-        close(new_sockfd);
+        handle_client(new_sockfd, client_addr);
     }
 
     close(sockfd);
