@@ -362,6 +362,12 @@ void download_file(int sockfd, char *buffer, const char *filename)
     printf("File downloaded successfully.\n");
 }
 
+/**
+ * @brief 连接到服务器
+ * @param hostname 服务器主机名
+ * @param port 服务器端口号
+ * @return 套接字文件描述符
+ */
 int connect_to_server(const char *hostname, int port)
 {
     // 创建socket
