@@ -90,6 +90,7 @@ void recv_file(int sockfd, char *buffer, const char *filename)
     sprintf(buffer, "226 Transfer complete.\r\n");
     send(sockfd, buffer, strlen(buffer), 0);
 
+    // 输出文件传输完成信息
     printf("File transfer complete.\r\n");
 }
 
@@ -150,7 +151,7 @@ void send_file_size(int sockfd, char *buffer, const char *filename)
         infile.close();
 
         memset(buffer, 0, BUFFER_SIZE);
-        sprintf(buffer, "%d bytes\r\n", size);
+        sprintf(buffer, "%d bytes.\r\n", size);
         send(sockfd, buffer, strlen(buffer), 0);
     }
 }
@@ -173,7 +174,7 @@ void send_directory_list(int sockfd, char *buffer)
     if (dir == NULL)
     {
         memset(buffer, 0, BUFFER_SIZE);
-        sprintf(buffer, "550 Failed to open directory.\r\n");
+        sprintf(buffer, "dir: cannot open directory '%s'\r\n", cwd);
         send(sockfd, buffer, strlen(buffer), MSG_NOSIGNAL);
     }
     else
@@ -188,7 +189,7 @@ void send_directory_list(int sockfd, char *buffer)
             else
                 strcpy(type, "?");
 
-            char perm[11] = "";
+            char perm[10] = "";
             if (stat(entry->d_name, &file_stat) == 0)
             {
                 mode_t mode = file_stat.st_mode;
@@ -227,8 +228,9 @@ void send_directory_list(int sockfd, char *buffer)
         closedir(dir);
 
         memset(buffer, 0, BUFFER_SIZE);
-        sprintf(buffer, "END");
+        sprintf(buffer, "END\r\n");
         send(sockfd, buffer, strlen(buffer), 0);
+
         printf("Directory send OK.\n");
     }
 }

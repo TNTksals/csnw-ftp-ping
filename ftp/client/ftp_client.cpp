@@ -94,6 +94,11 @@ void show_remote_file_size(int sockfd, char *buffer, const char *filename)
     // 接收服务器返回的信息
     memset(buffer, 0, BUFFER_SIZE);
     recv(sockfd, buffer, BUFFER_SIZE, 0);
+    if (strstr(buffer, "550 Failed to open file") != NULL)
+    {
+        printf("size: cannot size '%s': No such file or directory\n", filename);
+        return;
+    }
     printf("%s", buffer);
 }
 
@@ -131,10 +136,6 @@ void change_remote_directory(int sockfd, char *buffer, const char *path)
 /**
  * @brief 显示本地当前目录下的文件和子目录信息
  */
-
-/**
- * @brief 显示本地当前目录下的文件和子目录信息
- */
 void show_local_directory_info()
 {
     DIR *dir;              // 目录指针
@@ -159,7 +160,7 @@ void show_local_directory_info()
             else // 其他类型文件
                 strcpy(type, "?");
 
-            char perm[11] = "";                       // 文件权限
+            char perm[10] = "";                       // 文件权限
             if (stat(entry->d_name, &file_stat) == 0) // 获取文件状态
             {
                 mode_t mode = file_stat.st_mode;        // 文件模式
@@ -218,8 +219,13 @@ void show_remote_directory_info(int sockfd, char *buffer)
         memset(buffer, 0, BUFFER_SIZE);
         int n = recv(sockfd, buffer, BUFFER_SIZE, 0);
         if (n < 0)
-            error("Error: cannot receive directory information.");
-        if (strstr(buffer, "END") != NULL)
+            error("Error: cannot receive directory information");
+        if (strstr(buffer, "dir: cannot open directory") != NULL)
+        {
+            printf(buffer);
+            break;
+        }
+        else if (strstr(buffer, "END") != NULL)
         {
             char *p = strstr(buffer, "END");
             buffer[p - buffer] = '\0';
