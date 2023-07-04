@@ -41,7 +41,7 @@ void recv_file(int sockfd, char *buffer, const char *filename)
     if (outfile == NULL)
     {
         memset(buffer, 0, BUFFER_SIZE);
-        sprintf(buffer, "Failed to create file.\r\n");
+        sprintf(buffer, "550 Failed to create file.\r\n");
         send(sockfd, buffer, strlen(buffer), MSG_NOSIGNAL);
         return;
     }
@@ -115,7 +115,7 @@ void send_file(int sockfd, char *buffer, const char *filename)
     if (infile == NULL)
     {
         memset(buffer, 0, BUFFER_SIZE);
-        sprintf(buffer, "Failed to open file.\r\n");
+        sprintf(buffer, "550 Failed to open file.\r\n");
         send(sockfd, buffer, strlen(buffer), MSG_NOSIGNAL);
         return;
     }
@@ -143,7 +143,7 @@ void send_file_size(int sockfd, char *buffer, const char *filename)
     if (!infile)
     {
         memset(buffer, 0, BUFFER_SIZE);
-        sprintf(buffer, "Failed to open file.\r\n");
+        sprintf(buffer, "550 Failed to open file.\r\n");
         send(sockfd, buffer, strlen(buffer), 0);
     }
     else
@@ -176,7 +176,7 @@ void send_directory_list(int sockfd, char *buffer)
     if (dir == NULL)
     {
         memset(buffer, 0, BUFFER_SIZE);
-        sprintf(buffer, "Failed to open directory.\r\n");
+        sprintf(buffer, "550 Failed to open directory.\r\n");
         send(sockfd, buffer, strlen(buffer), MSG_NOSIGNAL);
     }
     else
@@ -334,7 +334,7 @@ void handle_client(int new_sockfd, struct sockaddr_in client_addr)
         memset(buffer, 0, BUFFER_SIZE);
         int n = recv(new_sockfd, buffer, BUFFER_SIZE - 1, 0);
         if (n < 0)
-            error("Error: cannot receive data from client.");
+            error("Error: cannot receive data from client");
         else if (n == 0)
         {
             printf("Client disconnected. IP address: %s, port: %d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
@@ -407,7 +407,7 @@ int start_server(int port)
     // 创建套接字
     int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sockfd < 0)
-        error("Error: cannot create socket.");
+        error("Error: cannot create socket");
 
     // 设置服务器的地址和端口号
     struct sockaddr_in server_addr;
@@ -448,7 +448,7 @@ int main(int argc, char *argv[])
         socklen_t client_addr_len = sizeof(client_addr);
         int new_sockfd = accept(sockfd, (struct sockaddr *)&client_addr, &client_addr_len);
         if (new_sockfd < 0)
-            error("Error: cannot accept client connection.");
+            error("Error: cannot accept client connection");
 
         printf("Client connected. IP address: %s, port: %d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
