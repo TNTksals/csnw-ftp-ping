@@ -126,6 +126,10 @@ void send_file(int sockfd, char *buffer, const char *filename)
     while ((n = fread(buffer, sizeof(char), BUFFER_SIZE, infile)) > 0)
         send(sockfd, buffer, n, 0);
 
+    memset(buffer, 0, BUFFER_SIZE);
+    sprintf(buffer, "EOF\r\n");
+    send(sockfd, buffer, strlen(buffer), 0);
+
     fclose(infile);
 
     // 输出文件传输完成信息

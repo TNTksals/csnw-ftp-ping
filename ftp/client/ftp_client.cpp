@@ -306,11 +306,7 @@ void download_file(int sockfd, char *buffer, const char *filename)
     // 创建本地文件
     FILE *outfile = fopen(filename, "wb");
     if (outfile == NULL)
-        error("Error: cannot create local file.");
-
-    // int n;
-    // while ((n = recv(sockfd, buffer, BUFFER_SIZE, 0)) > 0)
-    //     fwrite(buffer, sizeof(char), n, outfile);
+        error("Error: cannot create local file");
 
     // 接收文件数据
     int n;
@@ -323,34 +319,44 @@ void download_file(int sockfd, char *buffer, const char *filename)
 
         // 设置超时时间为1秒
         struct timeval timeout = {1, 0};
+        /**
+         * select函数用于等待socket变为可读.
+         * 第一个参数为最大的socket文件描述符加1.
+         * 第二个参数为可读的socket集合.
+         * 第三个参数为可写的socket集合.
+         * 第四个参数为异常的socket集合.
+         * 第五个参数为超时时间.
+         * 返回值为可读的socket数量.
+         */
         int ret = select(sockfd + 1, &read_fds, NULL, NULL, &timeout);
         if (ret == -1)
-        {
-            // 出现错误
-            break;
-        }
+            error("Error: select function failed");
         else if (ret == 0)
-        {
-            // 超时
-            break;
-        }
+            error("Timeout");
         else
         {
             // socket变为可读，使用recv函数接收数据
             n = recv(sockfd, buffer, BUFFER_SIZE, 0);
             if (n == -1)
-            {
-                // 出现错误
-                break;
-            }
+                error("Error receiving message from server");
             else if (n == 0)
-            {
-                // 对端已经关闭连接
-                break;
-            }
+                error("FTP server closed connection");
             else
             {
                 // 接收到了数据
+                buffer[n] = '\0';
+                if (strstr(buffer, "550 Failed to open file") != NULL)
+                {
+                    printf("550 Failed to download file.\n");
+                    return;
+                }
+                if (strstr(buffer, "EOF") != NULL)
+                {
+                    char *p = strstr(buffer, "EOF");
+                    fwrite(buffer, sizeof(char), p - buffer, outfile);
+                    printf("Received %ld bytes.\n", p - buffer);
+                    break;
+                }
                 fwrite(buffer, sizeof(char), n, outfile);
                 printf("Received %d bytes.\n", n);
             }
@@ -427,6 +433,13 @@ int main(int argc, char *argv[])
         char arg[BUFFER_SIZE];
         memset(cmd, 0, BUFFER_SIZE);
         memset(arg, 0, BUFFER_SIZE);
+        /**
+         * sscanf函数的第一个参数是要读取的字符串, 第二个参数是格式化字符串, 用于指定读取的数据类型和格式.
+         * 读取的数据会按照格式化字符串中的格式进行解析, 并按照参数列表的顺序存储到后面的参数中.
+         * 在这里，格式化字符串"%s %s"表示读取两个字符串，中间用空格分隔.
+         * 读取到的第一个字符串存储到cmd数组中，第二个字符串存储到arg数组中.
+         * 这行代码用于解析用户输入的命令和参数.
+         */
         sscanf(buffer, "%s %s", cmd, arg);
 
         // 处理命令
