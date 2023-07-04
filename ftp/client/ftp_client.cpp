@@ -285,9 +285,23 @@ void upload_file(int sockfd, char *buffer, const char *filename)
         printf("Sent %d bytes.\n", n);
     }
 
+    memset(buffer, 0, BUFFER_SIZE);
+    sprintf(buffer, "EOF\r\n");
+    send(sockfd, buffer, strlen(buffer), 0);
+
     fclose(infile);
 
-    printf("File uploaded successfully.\n");
+    memset(buffer, 0, BUFFER_SIZE);
+    recv(sockfd, buffer, BUFFER_SIZE, 0);
+    if (strstr(buffer, "550 Failed to create file") != NULL)
+    {
+        printf("Failed to upload file.\n");
+        return;
+    }
+    else if (strstr(buffer, "226 Transfer complete") != NULL)
+    {
+        printf("File uploaded successfully.\n");
+    }
 }
 
 /**
@@ -347,7 +361,7 @@ void download_file(int sockfd, char *buffer, const char *filename)
                 buffer[n] = '\0';
                 if (strstr(buffer, "550 Failed to open file") != NULL)
                 {
-                    printf("550 Failed to download file.\n");
+                    printf("Failed to download file.\n");
                     return;
                 }
                 if (strstr(buffer, "EOF") != NULL)

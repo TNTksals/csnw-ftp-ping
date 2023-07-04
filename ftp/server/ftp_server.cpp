@@ -65,38 +65,36 @@ void recv_file(int sockfd, char *buffer, const char *filename)
         struct timeval timeout = {1, 0};
         int ret = select(sockfd + 1, &read_fds, NULL, NULL, &timeout);
         if (ret == -1)
-        {
-            // 出现错误
-            break;
-        }
+            error("Error: select function failed", 0);
         else if (ret == 0)
-        {
-            // 超时
-            break;
-        }
+            error("Timeout", 0);
         else
         {
             // socket变为可读，使用recv函数接收数据
             n = recv(sockfd, buffer, BUFFER_SIZE, 0);
             if (n == -1)
-            {
-                // 出现错误
-                break;
-            }
+                error("Error receiving message from client", 0);
             else if (n == 0)
-            {
-                // 对端已经关闭连接
-                break;
-            }
+                error("FTP client closed connection", 0);
             else
             {
                 // 接收到了数据
+                if (strstr(buffer, "EOF") != NULL)
+                {
+                    char *p = strstr(buffer, "EOF");
+                    fwrite(buffer, sizeof(char), p - buffer, outfile);
+                    break;
+                }
                 fwrite(buffer, sizeof(char), n, outfile);
             }
         }
     }
 
     fclose(outfile);
+
+    memset(buffer, 0, BUFFER_SIZE);
+    sprintf(buffer, "226 Transfer complete.\r\n");
+    send(sockfd, buffer, strlen(buffer), 0);
 
     printf("File transfer complete.\r\n");
 }
@@ -325,7 +323,7 @@ void send_goodbye_message(int sockfd, char *buffer)
  * @brief 处理与客户端的通信
  * @param sockfd 套接字描述符
  * @param client_addr 客户端地址
-*/
+ */
 void handle_client(int new_sockfd, struct sockaddr_in client_addr)
 {
     // 处理与客户端的通信
