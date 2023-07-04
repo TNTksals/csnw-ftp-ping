@@ -19,10 +19,11 @@
 /**
  * @brief 输出错误信息并退出程序
  * @param msg 错误信息
+ * @param err_code 错误码
  */
-void error(const char *msg)
+void error(const char *msg, int err_code)
 {
-    perror(msg);
+    fprintf(stderr, "Error: %s (error code: %d)\n", msg, err_code);
     exit(1);
 }
 
@@ -334,7 +335,7 @@ void handle_client(int new_sockfd, struct sockaddr_in client_addr)
         memset(buffer, 0, BUFFER_SIZE);
         int n = recv(new_sockfd, buffer, BUFFER_SIZE - 1, 0);
         if (n < 0)
-            error("Error: cannot receive data from client");
+            error("cannot receive data from client", 426);
         else if (n == 0)
         {
             printf("Client disconnected. IP address: %s, port: %d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
@@ -407,7 +408,7 @@ int start_server(int port)
     // 创建套接字
     int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sockfd < 0)
-        error("Error: cannot create socket");
+        error("cannot create socket", 421);
 
     // 设置服务器的地址和端口号
     struct sockaddr_in server_addr;
@@ -418,11 +419,11 @@ int start_server(int port)
 
     // 绑定socket到指定的端口号
     if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-        error("Error: cannot bind socket to port");
+        error("cannot bind socket to port", 425);
 
     // 设置socket为监听状态
     if (listen(sockfd, MAX_CLIENTS) < 0)
-        error("Error: cannot listen on socket");
+        error("cannot listen on socket", 426);
 
     printf("Server started. Listening on port %d...\n", port);
 
@@ -448,7 +449,7 @@ int main(int argc, char *argv[])
         socklen_t client_addr_len = sizeof(client_addr);
         int new_sockfd = accept(sockfd, (struct sockaddr *)&client_addr, &client_addr_len);
         if (new_sockfd < 0)
-            error("Error: cannot accept client connection");
+            error("cannot accept client connection", 421);
 
         printf("Client connected. IP address: %s, port: %d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
