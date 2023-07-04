@@ -46,11 +46,6 @@ void recv_file(int sockfd, char *buffer, const char *filename)
         return;
     }
 
-    // // 接收文件数据
-    // int n;
-    // while ((n = recv(sockfd, buffer, BUFFER_SIZE, 0)) > 0)
-    //     fwrite(buffer, sizeof(char), n, outfile);
-
     // 接收文件数据
     int n;
     while (true)
@@ -64,17 +59,17 @@ void recv_file(int sockfd, char *buffer, const char *filename)
         struct timeval timeout = {1, 0};
         int ret = select(sockfd + 1, &read_fds, NULL, NULL, &timeout);
         if (ret == -1)
-            error("Error: select function failed", 0);
+            error("Error: select function failed");
         else if (ret == 0)
-            error("Timeout", 0);
+            error("Timeout");
         else
         {
             // socket变为可读，使用recv函数接收数据
             n = recv(sockfd, buffer, BUFFER_SIZE, 0);
             if (n == -1)
-                error("Error receiving message from client", 0);
+                error("Error receiving message from client");
             else if (n == 0)
-                error("FTP client closed connection", 0);
+                error("FTP client closed connection");
             else
             {
                 // 接收到了数据
