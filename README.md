@@ -6,9 +6,9 @@ This project contains a simple implementation of an FTP server and client, as we
 
 -  Programming Language：C/C++
 - Compiler：g++
-- Platform：Debian Linux
+- Platform：Debian Linux（ftp），Windows 11（ping）
 
-## Directory Structure
+## Folder Structure
 
 ```
 ftp/
@@ -25,17 +25,24 @@ ping/
 To build the project, navigate to the root directory of the project and run the following command：
 
 ```
+git@github.com:TNTksals/csnw-ftp-ping.git
 ```
 
-To run the executable, use the following command:
+To run the FTP server, use the following command:
 
 ```
+./server <port>
+```
 
+To run the FTP client, use the following command:
+
+```
+./client <hostname> <port>
 ```
 
 ## License
 
-
+This project is licensed under the BSD License.
 
 ## Contributing
 
